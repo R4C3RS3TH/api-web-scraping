@@ -46,11 +46,12 @@ def parse_date(val):
 
 
 def fetch_latest_sismos(limit=10):
+    # CAMBIO: Pedimos 20 por si hay basura
     params = {
         "where": "1=1",
         "outFields": "*",
         "orderByFields": "fechaevento DESC",
-        "resultRecordCount": limit,
+        "resultRecordCount": 20,
         "f": "geojson",
     }
     resp = requests.get(ARCGIS_LAYER_URL, params=params, timeout=15)
@@ -66,6 +67,13 @@ def fetch_latest_sismos(limit=10):
         lat = coords[1] if len(coords) >= 2 else (attrs.get("lat") or "")
 
         fecha_iso = parse_date(attrs.get("fechaevento") or attrs.get("FECHAEVENTO"))
+        
+        # --- FILTRO DE SEGURIDAD ---
+        # Si no tiene fecha, es basura (ID 3 y 6). Lo saltamos.
+        if not fecha_iso:
+            continue
+        # ---------------------------
+
         item_id = str(
             attrs.get("code") or attrs.get("objectid") or attrs.get("OBJECTID") or uuid.uuid4()
         )
@@ -76,8 +84,6 @@ def fetch_latest_sismos(limit=10):
             "fechaevento": fecha_iso or "",
             "fecha": str(attrs.get("fecha") or ""),
             "hora": str(attrs.get("hora") or ""),
-            # mantengo como string para evitar conversiones innecesarias,
-            # los valores numéricos en 'raw' serán convertidos por convert_numbers
             "magnitud": str(attrs.get("magnitud") or attrs.get("mag") or ""),
             "lat": str(lat) if lat != "" else "",
             "lon": str(lon) if lon != "" else "",
@@ -85,6 +91,11 @@ def fetch_latest_sismos(limit=10):
             "raw": {k: (v if v is not None else "") for k, v in attrs.items()},
         }
         items.append(item)
+        
+        # Paramos al llegar al límite deseado (10)
+        if len(items) >= limit:
+            break
+            
     return items
 
 
